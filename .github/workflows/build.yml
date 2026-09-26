@@ -1,0 +1,91 @@
+name: Build Arcane ASI
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 360
+
+    steps:
+    - name: Checkout main repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Fetch submodules manually
+      run: |
+        git clone --depth 1 https://github.com/gesellschaftsmitglieder/vmprotect-sdk third-party/vmprotect-sdk
+        git clone --depth 1 https://github.com/abdes/cryptopp-cmake third-party/cryptopp-cmake
+        git clone --depth 1 https://github.com/neovstan/kthook third-party/kthook
+        git clone --depth 1 https://github.com/ThePhD/infoware third-party/infoware
+        git clone --depth 1 https://github.com/neovstan/SAMP-API third-party/SAMP-API
+        git clone --depth 1 https://github.com/nlohmann/json third-party/nlohmann_json
+        git clone --depth 1 https://github.com/neovstan/cmake-imgui third-party/cmake-imgui
+      continue-on-error: true
+
+    - name: Free disk space
+      run: |
+        Remove-Item -Recurse -Force "C:\Program Files\dotnet" -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force "C:\Program Files\Java" -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force "C:\Program Files (x86)\Android" -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force "C:\hostedtoolcache\windows\Python" -ErrorAction SilentlyContinue
+
+    - name: Setup MSVC 32-bit
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
+
+    - name: Install Qt 5.15.2 (32-bit MSVC)
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '5.15.2'
+        arch: 'win32_msvc2019'
+        cache: true
+
+    - name: Install Conan
+      run: |
+        python -m pip install --upgrade pip
+        pip install conan==1.59.0
+
+    - name: Conan profile setup
+      run: |
+        conan profile new default --detect --force
+        conan profile update settings.arch=x86 default
+        conan profile update settings.arch_build=x86 default
+        conan profile update settings.compiler.runtime=MD default
+        conan profile update settings.build_type=Release default
+      continue-on-error: true
+
+    - name: Conan install
+      run: conan install . -s build_type=Release --build=missing
+      continue-on-error: true
+
+    - name: Configure CMake
+      run: |
+        mkdir build
+        cd build
+        cmake .. -A Win32 `
+          -DQT_PATH="${{ env.QT_ROOT_DIR }}" `
+          -DASI_PLUGIN_OUTPUT_DIR="${{ github.workspace }}/output" `
+          -DVMP_DEBUG=1 `
+          -DCMAKE_BUILD_TYPE=Release
+      continue-on-error: true
+
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --config Release --parallel
+      continue-on-error: true
+
+    - name: Upload ASI
+      uses: actions/upload-artifact@v4
+      with:
+        name: Arcane-ASI
+        path: |
+          output/*.asi
+          build/**/*.asi
+        if-no-files-found: warn
