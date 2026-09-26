@@ -27,17 +27,15 @@ jobs:
         git clone --depth 1 https://github.com/neovstan/cmake-imgui third-party/cmake-imgui
       continue-on-error: true
 
-    - name: Free disk space
-      run: |
-        Remove-Item -Recurse -Force "C:\Program Files\dotnet" -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force "C:\Program Files\Java" -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force "C:\Program Files (x86)\Android" -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force "C:\hostedtoolcache\windows\Python" -ErrorAction SilentlyContinue
-
     - name: Setup MSVC 32-bit
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: x86
+
+    - name: Setup Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
     - name: Install Qt 5.15.2 (32-bit MSVC)
       uses: jurplel/install-qt-action@v4
@@ -45,11 +43,6 @@ jobs:
         version: '5.15.2'
         arch: 'win32_msvc2019'
         cache: true
-
-      - name: Setup Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
 
     - name: Install Conan
       run: |
@@ -70,20 +63,11 @@ jobs:
       continue-on-error: true
 
     - name: Configure CMake
-      run: |
-        mkdir build
-        cd build
-        cmake .. -A Win32 `
-          -DQT_PATH="${{ env.QT_ROOT_DIR }}" `
-          -DASI_PLUGIN_OUTPUT_DIR="${{ github.workspace }}/output" `
-          -DVMP_DEBUG=1 `
-          -DCMAKE_BUILD_TYPE=Release
+      run: cmake -B build -A Win32 -DQT_PATH="$env:QT_ROOT_DIR" -DASI_PLUGIN_OUTPUT_DIR="${{ github.workspace }}/output" -DVMP_DEBUG=1 -DCMAKE_BUILD_TYPE=Release
       continue-on-error: true
 
     - name: Build
-      run: |
-        cd build
-        cmake --build . --config Release --parallel
+      run: cmake --build build --config Release --parallel
       continue-on-error: true
 
     - name: Upload ASI
